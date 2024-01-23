@@ -103,6 +103,9 @@ class Dataset(Dataset):
 
         convert_fn = partial(convert_image_to, convert_image_to_type) if exists(convert_image_to_type) else nn.Identity()
 
+        landmark_path = Path(folder).parent / 'landmarks.pt'
+        self.landmarks = torch.load(landmark_path).float()
+
         self.transform = T.Compose([
             T.Lambda(convert_fn),
             T.Resize(image_size),
@@ -117,7 +120,7 @@ class Dataset(Dataset):
     def __getitem__(self, index):
         path = self.paths[index]
         img = Image.open(path)
-        return self.transform(img)
+        return self.transform(img), self.landmarks[index]
 
 def get_images_dataloader(
     folder,

@@ -1585,70 +1585,7 @@ class Unet(nn.Module):
 
         # text conditioning
 
-        text_tokens = None
-
-        if exists(text_embeds) and self.cond_on_text:
-
-            # conditional dropout
-
-            text_keep_mask = prob_mask_like((batch_size,), 1 - cond_drop_prob, device = device)
-
-            text_keep_mask_embed = rearrange(text_keep_mask, 'b -> b 1 1')
-            text_keep_mask_hidden = rearrange(text_keep_mask, 'b -> b 1')
-
-            # calculate text embeds
-
-            text_tokens = self.text_to_cond(text_embeds)
-
-            text_tokens = text_tokens[:, :self.max_text_len]
-
-            if exists(text_mask):
-                text_mask = text_mask[:, :self.max_text_len]
-
-            text_tokens_len = text_tokens.shape[1]
-            remainder = self.max_text_len - text_tokens_len
-
-            if remainder > 0:
-                text_tokens = F.pad(text_tokens, (0, 0, 0, remainder))
-
-            if exists(text_mask):
-                if remainder > 0:
-                    text_mask = F.pad(text_mask, (0, remainder), value = False)
-
-                text_mask = rearrange(text_mask, 'b n -> b n 1')
-                text_keep_mask_embed = text_mask & text_keep_mask_embed
-
-            null_text_embed = self.null_text_embed.to(text_tokens.dtype) # for some reason pytorch AMP not working
-
-            text_tokens = torch.where(
-                text_keep_mask_embed,
-                text_tokens,
-                null_text_embed
-            )
-
-            if exists(self.attn_pool):
-                text_tokens = self.attn_pool(text_tokens)
-
-            # extra non-attention conditioning by projecting and then summing text embeddings to time
-            # termed as text hiddens
-
-            mean_pooled_text_tokens = text_tokens.mean(dim = -2)
-
-            text_hiddens = self.to_text_non_attn_cond(mean_pooled_text_tokens)
-
-            null_text_hidden = self.null_text_hidden.to(t.dtype)
-
-            text_hiddens = torch.where(
-                text_keep_mask_hidden,
-                text_hiddens,
-                null_text_hidden
-            )
-
-            t = t + text_hiddens
-
-        # main conditioning tokens (c)
-
-        c = time_tokens if not exists(text_tokens) else torch.cat((time_tokens, text_tokens), dim = -2)
+        c = time_tokens if not self.cond_on_text else torch.cat((time_tokens, text_embeds[:,None,:]), dim = -2)
 
         # normalize conditioning tokens
 
